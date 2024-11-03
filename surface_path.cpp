@@ -81,14 +81,11 @@ void getGridPoints(std::vector<Point> &out,
 		// x_next is nearest
 		p_start.y += (x_next-p_start.x)*k;
 		p_start.x = x_next;
-		//std::cout << "x="<<x_next<<"\n";
 	    }else{
 		// y_next is nearest
 		p_start.x += (y_next-p_start.y)/k;
 		p_start.y = y_next;
-		//std::cout << "y="<<y_next<<"\n";
 	    }
-	    //std::cout <<"p "<< p_start.x <<" "<<p_start.y <<"\n";
 	    out.push_back({p_start.x+p_offset.x, p_start.y+p_offset.y});
 	}
     }
@@ -211,10 +208,9 @@ bool getMiddlePoint(Point p1, Point p2, Point &ret){
     return true;
 }
 
-double getCellDiff(Point p1,
+double getCellDist(Point p1,
 		   Point p2,
-		   std::vector<uint8_t> &pre,
-		   std::vector<uint8_t> &post,
+		   std::vector<uint8_t> &data,
 		   uint32_t dx,
 		   uint32_t dy)
 {
@@ -228,11 +224,9 @@ double getCellDiff(Point p1,
     // get diagonal point
     Point p_middle;
     bool hasMiddle = getMiddlePoint(p1, p2, p_middle);
-    if (hasMiddle)
-	std::cout << "tri point ["<< p_middle.x <<" "<<p_middle.y << "] \n";
     
     // pre
-    getCellVal(pts, x_start, y_start, dx, pre);
+    getCellVal(pts, x_start, y_start, dx, data);
     double p1_val = getPointVal(p1, x_start, y_start, pts);
     double p2_val = getPointVal(p2, x_start, y_start, pts);
     double pm_val = getPointVal(p_middle, x_start, y_start, pts);
@@ -241,30 +235,37 @@ double getCellDiff(Point p1,
     else ret = toRealWorldSurfaceDist(p1.x, p1.y, p_middle.x, p_middle.y, p1_val, pm_val)
 	     + toRealWorldSurfaceDist(p2.x, p2.y, p_middle.x, p_middle.y, p2_val, pm_val);
 
-    // post
-    getCellVal(pts, x_start, y_start, dx, post);
-    p1_val = getPointVal(p1, x_start, y_start, pts);
-    p2_val = getPointVal(p2, x_start, y_start, pts);
-
-    // get cell difference
-    if (!hasMiddle)
-	ret2 = toRealWorldSurfaceDist(p1.x, p1.y, p2.x, p2.y, p1_val, p2_val);
-    else {
-	pm_val = getPointVal(p_middle, x_start, y_start, pts);
-	ret2 = toRealWorldSurfaceDist(p1.x, p1.y, p_middle.x, p_middle.y, p1_val, pm_val)
-	     + toRealWorldSurfaceDist(p2.x, p2.y, p_middle.x, p_middle.y, p2_val, pm_val);
-    }
-    ret = ret2 - ret;
-
-    //std::cout << "cell pts values for ";
-    //std::cout <<"["<< p1.x <<" "<<p1.y <<" "<<p2.x <<" "<<p2.y<<"] \n"
-    //for (int i=0; i<4; i++)
-    //	std::cout << unsigned(pts[i]) <<" ";
-    //std::cout <<std::endl;
-
     return ret;
 }
 
+/// compute surface path
+
+double getPathDist(std::vector<uint8_t> &data,
+		   std::vector<Point> &pts,
+		   uint32_t p1x,
+		   uint32_t p1y,
+		   uint32_t p2x,
+		   uint32_t p2y,
+		   uint32_t dx,
+		   uint32_t dy,
+		   bool print_path)
+{
+    Point s = {p1x,p1y};
+    Point e = {p2x,p2y};
+    getGridPoints(pts, s, e);
+
+    double sum = 0;
+    for (uint32_t i =0; i<pts.size()-1; i++){
+	    auto v = getCellDist(pts[i], pts[i+1], data, dx, dy);
+	    sum += v;
+	    if (print_path)
+		std::cout << "from ["<<pts[i].x <<", "<<pts[i].y<<"] \n" 
+			  << "to   ["<<pts[i+1].x <<", "<<pts[i+1].y<<"] \n"
+			  << "cell diff="<< v  <<" \n\n" ;
+	}
+
+    return sum;
+}
 
 
 int main(int argc, char **argv)
@@ -323,22 +324,10 @@ int main(int argc, char **argv)
 	p2x = nums[2];
 	p2y = nums[3];
 
-	Point s = {p1x,p1y};
-	Point e = {p2x,p2y};
-	getGridPoints(pts, s, e);
-
 	std::cout << "\n";
-	double diff = 0;
-	for (uint32_t i =0; i<pts.size()-1; i++){
-	    auto v = getCellDiff(pts[i], pts[i+1], pre_data, post_data, dx, dy);
-	    diff += v;
-	    if (print_path)
-		std::cout << "from ["<<pts[i].x <<", "<<pts[i].y<<"] \n" 
-			  << "to   ["<<pts[i+1].x <<", "<<pts[i+1].y<<"] \n"
-			  << "cell diff="<< v  <<" \n\n" ;
-	}
-	
-	std::cout << "diff=" << diff <<"\n";
+	double dist_pre = getPathDist(pre_data, pts, p1x, p1y, p2x, p2y, dx, dy, print_path);
+	double dist_post = getPathDist(post_data, pts, p1x, p1y, p2x, p2y, dx, dy, print_path);
+	std::cout << "diff=" << dist_post - dist_pre <<"\n";
     }
     
     return 0;
